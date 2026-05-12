@@ -18,16 +18,17 @@ jobs:
     timeout-minutes: 120
     env:
       build_variant: mt7628
-      targets: "HC5861B"  # 360P2 在源码里的标准机型名
+      targets: "HC5861B"
       images_dir: /opt/images
     steps:
-      - name: Checkout code from my own repo
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Prepare environment
         run: |
           sudo apt update -y
-          sudo apt install -y libtool-bin gperf python3-docutils autopoint gettext p7zip-full
+          sudo apt install -y libtool-bin gperf python3-docutils autopoint gettext p7zip-full \
+                              cmake libssl-dev libcurl4-openssl-dev build-essential
 
       - name: Prepare toolchain
         run: |
@@ -45,7 +46,8 @@ jobs:
           cd trunk
           mkdir -p ${images_dir}
           echo "===== Building HC5861B (360P2) ====="
-          fakeroot ./build_firmware_ci HC5861B
+          # 关键修复：补充 NO_MSD_LITE=1 跳过 msd_lite 编译
+          fakeroot ./build_firmware_ci HC5861B NO_MSD_LITE=1
           if [ $? -eq 0 ]; then
             cp -f images/*.trx ${images_dir}/360P2.trx
           else
