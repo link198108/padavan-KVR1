@@ -1,0 +1,73 @@
+name: build-360p2-kvr
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        description: 'Run with tmate debugging'
+        required: false
+        default: 'no'
+
+jobs:
+  build:
+    name: build-360p2
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    env:
+      build_variant: mt7628
+      targets: "HC5861B"  # 360P2 在源码里的标准机型名
+      images_dir: /opt/images
+    steps:
+      - name: Checkout code from my own repo
+        uses: actions/checkout@v4
+
+      - name: Prepare environment
+        run: |
+          sudo apt update -y
+          sudo apt install -y libtool-bin gperf python3-docutils autopoint gettext p7zip-full
+
+      - name: Prepare toolchain
+        run: |
+          cd toolchain-mipsel
+          sh dl_toolchain.sh
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled == 'yes' }}
+        with:
+          limit-access-to-actor: true
+
+      - name: Build 360P2 (HC5861B) firmware
+        run: |
+          cd trunk
+          mkdir -p ${images_dir}
+          echo "===== Building HC5861B (360P2) ====="
+          fakeroot ./build_firmware_ci HC5861B
+          if [ $? -eq 0 ]; then
+            cp -f images/*.trx ${images_dir}/360P2.trx
+          else
+            echo "ERROR: Build failed"
+            exit 1
+          fi
+          ./clear_tree_simple >/dev/null 2>&1
+
+      - name: Create archive
+        if: success()
+        run: |
+          ls -lh ${images_dir}
+          GIT_VERSION=$(git rev-parse --short=7 HEAD 2>/dev/null || echo "unknown")
+          image_name=360P2_firmware_${GIT_VERSION}
+          cd ${images_dir}
+          md5sum *.trx | tee md5sum.txt
+          7z a -mx=9 ${image_name}.7z ./*
+          echo "image_name=${image_name}" >> $GITHUB_ENV
+
+      - name: Upload images to Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.image_name }}
+          path: ${{ env.images_dir }}/*.7z
