@@ -27,13 +27,17 @@ jobs:
       - name: Prepare environment
         run: |
           sudo apt update -y
-          sudo apt install -y libtool-bin gperf python3-docutils autopoint gettext p7zip-full \
-                              cmake libssl-dev libcurl4-openssl-dev build-essential
+          sudo apt install -y libtool-bin gperf python3-docutils autopoint gettext p7zip-full build-essential
 
       - name: Prepare toolchain
         run: |
           cd toolchain-mipsel
           sh dl_toolchain.sh
+
+      - name: Patch source - Disable msd_lite compilation
+        run: |
+          # 直接删除 msd_lite 目录，强制跳过编译
+          rm -rf trunk/user/msd_lite
 
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
@@ -46,8 +50,7 @@ jobs:
           cd trunk
           mkdir -p ${images_dir}
           echo "===== Building HC5861B (360P2) ====="
-          # 关键修复：补充 NO_MSD_LITE=1 跳过 msd_lite 编译
-          fakeroot ./build_firmware_ci HC5861B NO_MSD_LITE=1
+          fakeroot ./build_firmware_ci HC5861B
           if [ $? -eq 0 ]; then
             cp -f images/*.trx ${images_dir}/360P2.trx
           else
